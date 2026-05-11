@@ -8,12 +8,17 @@ import os
 import time
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Any
 
 import requests
 import yaml
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
 
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "config.yaml"
 
@@ -152,7 +157,7 @@ def tiingo_daily(symbol: str, start_date: str,
 
 
 def fetch_treasury_rates_paginated(years: int = 5) -> list:
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     start = today - timedelta(days=years * 365)
     window_days = CFG['date_ranges']['treasury_window_days']
     all_rows = []
@@ -180,14 +185,14 @@ def fetch_spy_long_history(force_refresh: bool = False) -> Optional[list]:
     cache_path = Path(CFG['paths']['long_history_cache'])
     refresh_days = CFG['paths']['long_history_refresh_days']
     if not force_refresh and cache_path.exists():
-        age_days = (datetime.utcnow().timestamp() - cache_path.stat().st_mtime) / 86400
+        age_days = (utcnow().timestamp() - cache_path.stat().st_mtime) / 86400
         if age_days < refresh_days:
             log.info(f"Using cached SPY long history ({age_days:.0f}d old)")
             with open(cache_path) as f:
                 return json.load(f)
     log.info("Pulling SPY long history from Tiingo (1993+)...")
     start = CFG['date_ranges']['tiingo_history_start']
-    end = datetime.utcnow().date().strftime("%Y-%m-%d")
+    end = utcnow().date().strftime("%Y-%m-%d")
     data = tiingo_daily(CFG['tickers']['spy_long_history'], start, end)
     if data:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,8 +202,27 @@ def fetch_spy_long_history(force_refresh: bool = False) -> Optional[list]:
     return data
 
 
+def fetch_sector_history(sectors: list, start: str, end: str) -> Optional[list]:
+    """FMP historical-sector-performance requires sector= param per call.
+    Iterate the 11 sectors from the snapshot and flatten into one list,
+    tagging each row with its sector name.
+    """
+    if not sectors:
+        return None
+    all_rows = []
+    for s in sectors:
+        chunk = fmp_get("historical-sector-performance", {
+            "sector": s, "from": start, "to": end,
+        })
+        if chunk:
+            for row in chunk:
+                row.setdefault("sector", s)
+            all_rows.extend(chunk)
+    return all_rows if all_rows else None
+
+
 def fetch_dollar_index(years: int = 5) -> dict:
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     start = (today - timedelta(days=years * 365)).strftime("%Y-%m-%d")
     end = today.strftime("%Y-%m-%d")
     primary = fred_get_series(CFG['fred']['series']['dollar_index'], start, end)
@@ -214,7 +238,7 @@ def fetch_dollar_index(years: int = 5) -> dict:
 
 
 def fetch_all_signals() -> dict:
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     fmp_years = CFG['date_ranges']['fmp_history_years']
     fred_years = CFG['date_ranges']['fred_history_years']
     start_5y = (today - timedelta(days=fmp_years * 365)).strftime("%Y-%m-%d")
@@ -225,7 +249,7 @@ def fetch_all_signals() -> dict:
     holiday_end = (today + timedelta(days=CFG['date_ranges']['holidays_days_forward'])).strftime("%Y-%m-%d")
 
     signals = {
-        "fetched_at_utc": datetime.utcnow().isoformat(),
+        "fetched_at_utc": utcnow().isoformat(),
         "config_version": CFG['project']['version'],
     }
 
@@ -249,10 +273,14 @@ def fetch_all_signals() -> dict:
     })
     log.info("Fetching sector performance snapshot...")
     signals['sector_snapshot'] = fmp_get("sector-performance-snapshot", {"date": end_today})
-    log.info("Fetching sector performance 90d history...")
-    signals['sector_history'] = fmp_get("historical-sector-performance", {
-        "from": start_90d_back, "to": end_today,
-    })
+    log.info("Fetching sector performance 90d history (per-sector)...")
+    sector_names = [
+        r.get('sector') for r in (signals.get('sector_snapshot') or [])
+        if r.get('sector')
+    ]
+    signals['sector_history'] = fetch_sector_history(
+        sector_names, start_90d_back, end_today,
+    )
     log.info("Fetching NYSE holidays (90d forward)...")
     signals['nyse_holidays'] = fmp_get("holidays-by-exchange", {
         "exchange": "NYSE", "from": end_today, "to": holiday_end,

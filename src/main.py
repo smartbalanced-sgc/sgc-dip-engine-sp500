@@ -4,16 +4,15 @@ Fetches all signals, writes JSON + markdown summary, prints sanity table.
 """
 
 import json
-from datetime import datetime
 from pathlib import Path
 
-from data_fetcher import fetch_all_signals, CFG, log
+from data_fetcher import fetch_all_signals, CFG, log, utcnow
 
 
 def write_json(signals: dict) -> Path:
     data_dir = Path(CFG['paths']['data_dir'])
     data_dir.mkdir(parents=True, exist_ok=True)
-    today = datetime.utcnow().date().strftime("%Y%m%d")
+    today = utcnow().date().strftime("%Y%m%d")
     filename = CFG['paths']['raw_signals_filename'].format(date=today)
     out_path = data_dir / filename
     with open(out_path, "w") as f:
@@ -122,7 +121,7 @@ def print_summary(signals: dict, json_path: Path) -> None:
 
 
 def main() -> None:
-    log.info(f"SPY Dip Engine Phase 1 - {datetime.utcnow().isoformat()} UTC")
+    log.info(f"SPY Dip Engine Phase 1 - {utcnow().isoformat()} UTC")
     signals = fetch_all_signals()
     json_path = write_json(signals)
     md_path = write_latest_markdown(signals, json_path)
