@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# SPY Dip Engine local additions
+data/*.json
+data/*.csv
+data/cache/
+.DS_Store
+

@@ -1,0 +1,91 @@
+project:
+  name: "SPY 60-day Dip Prediction System"
+  version: "0.1.0-phase1"
+  phase: "1-data-layer"
+  description: "Modelling vehicle ^GSPC, execution vehicle VUAA.L"
+
+tickers:
+  modelling: "^GSPC"
+  execution: "VUAA.L"
+  vix: "^VIX"
+  spy_long_history: "SPY"
+
+date_ranges:
+  fmp_history_years: 5
+  treasury_window_days: 90
+  econ_calendar_days_forward: 90
+  sector_perf_days_back: 90
+  holidays_days_forward: 90
+  fred_history_years: 5
+  tiingo_history_start: "1993-01-29"
+
+fmp:
+  base_url: "https://financialmodelingprep.com/stable"
+  rate_limit_per_minute: 300
+  delay_between_calls_sec: 0.3
+  timeout_sec: 10
+  retry_max_attempts: 3
+  retry_backoff_sec: [2, 4, 8]
+
+fred:
+  base_url: "https://api.stlouisfed.org/fred/series/observations"
+  timeout_sec: 10
+  retry_max_attempts: 3
+  retry_backoff_sec: [2, 4, 8]
+  series:
+    credit_spreads_hy: "BAMLH0A0HYM2"
+    credit_spreads_ig: "BAMLC0A0CM"
+    dollar_index: "DTWEXBGS"
+    vix_spot: "VIXCLS"
+    vix_3m: "VXVCLS"
+
+tiingo:
+  base_url: "https://api.tiingo.com/tiingo/daily"
+  timeout_sec: 15
+  retry_max_attempts: 3
+  retry_backoff_sec: [2, 4, 8]
+
+fallbacks:
+  dollar_index:
+    primary: "fred:DTWEXBGS"
+    secondary: "fmp:UUP"
+  vix_spot:
+    primary: "fmp:^VIX"
+    secondary: "fred:VIXCLS"
+
+composite_score:
+  weights:
+    vix_regime:         {min: -30, max: 30}
+    vix_term_structure: {min: -15, max: 15}
+    yield_curve:        {min: -20, max: 20}
+    credit_spreads:     {min: -15, max: 15}
+    sector_rotation:    {min: -20, max: 20}
+    dollar_trend:       {min: -15, max: 15}
+    rsi_drawdown:       {min: -15, max: 15}
+    economic_calendar:  {min: -10, max: 10}
+
+monte_carlo:
+  horizon_days: 60
+  n_paths: 1000000
+  batch_size: 100000
+  student_t_df: 4
+  drift_cap_annual: 0.50
+  vix_blend_weights:
+    vix_spot: 0.5
+    vix_3m:   0.5
+
+conviction:
+  default_target_pct: 0.70
+  thresholds:
+    moderate: 0.60
+    strong:   0.70
+    extreme:  0.80
+  divergence_warn_threshold: 0.20
+
+paths:
+  data_dir: "data"
+  raw_signals_filename: "raw_signals_{date}.json"
+  latest_summary_filename: "latest.md"
+  cache_dir: "data/cache"
+  long_history_cache: "data/cache/spy_long_history.json"
+  long_history_refresh_days: 90
