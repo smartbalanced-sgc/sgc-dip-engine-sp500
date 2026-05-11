@@ -39,7 +39,13 @@ def write_latest_markdown(signals: dict, json_path: Path) -> Path:
     vs_latest = vix_spot[-1]['value'] if vix_spot else None
     v3_latest = vix_3m[-1]['value'] if vix_3m else None
     ts_ratio = (v3_latest / vs_latest) if (vs_latest and v3_latest) else None
-    dx_latest = dx[-1] if dx else None
+    dx_latest_row = dx[-1] if dx else None
+    if isinstance(dx_latest_row, dict):
+        dx_latest = dx_latest_row.get('value') or dx_latest_row.get('close')
+        dx_latest_date = dx_latest_row.get('date')
+    else:
+        dx_latest = dx_latest_row
+        dx_latest_date = None
 
     lines = [
         "# SPY Dip Engine - Latest Data Pull",
@@ -55,7 +61,8 @@ def write_latest_markdown(signals: dict, json_path: Path) -> Path:
         (f"| VIX3M/VIX ratio | {ts_ratio:.3f} (>1=contango, <1=backwardation) | FRED |"
          if ts_ratio else "| VIX3M/VIX ratio | n/a | FRED |"),
         f"| HY credit spread (OAS %) | {cs_latest} | FRED BAMLH0A0HYM2 |",
-        f"| Dollar index | {dx_latest} | {dx_source} |",
+        (f"| Dollar index | {dx_latest} (as of {dx_latest_date}) | {dx_source} |"
+         if dx_latest_date else f"| Dollar index | {dx_latest} | {dx_source} |"),
         "",
         "## Row counts (data quality check)",
         "",
