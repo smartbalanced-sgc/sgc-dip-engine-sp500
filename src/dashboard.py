@@ -302,7 +302,9 @@ def render_dashboard(signals: dict, models: dict, history: list,
 <header>
   <div class="container">
     <h1>SPY Dip Engine</h1>
-    <p>S&amp;P 500 60-day dip prediction. NOT for active trading. Last update: {fetched}</p>
+    <p>S&amp;P 500 60-day dip prediction. NOT for active trading. Last update: {fetched}
+       &nbsp;&middot;&nbsp; <a href="backtest.html" style="color:#f5f5f7;opacity:0.85">Backtest &rarr;</a>
+    </p>
   </div>
 </header>
 <div class="container">
