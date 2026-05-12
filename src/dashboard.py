@@ -137,12 +137,19 @@ def _spot_table(signals: dict) -> str:
         last = dx[-1]
         dx_latest = last.get('value') if isinstance(last, dict) else last
 
+    dx_date = None
+    if dx and isinstance(dx[-1], dict):
+        dx_date = dx[-1].get('date')
+    dx_cell = _fmt_money(dx_latest, 2)
+    if dx_date:
+        dx_cell = f"{dx_cell} <span style='color:#999;font-size:12px'>({dx_date})</span>"
+
     rows = [
         ("^GSPC", _fmt_money(gspc, 2), "FMP"),
         ("^VIX", _fmt_money(vix, 2), "FMP"),
         ("VIX3M/VIX", f"{ratio:.3f}" if ratio else "n/a", "FRED"),
         ("HY OAS %", _fmt_money(cs[-1]['value'], 2) if cs else "n/a", "FRED"),
-        ("Dollar index", _fmt_money(dx_latest, 2), dx_block.get('source', '')),
+        ("Dollar index", dx_cell, dx_block.get('source', '')),
     ]
     body = "".join(f"<tr><td>{a}</td><td class='num'>{b}</td><td>{c}</td></tr>"
                    for a, b, c in rows)
@@ -170,6 +177,12 @@ def _dip_targets_table(mc: dict, an: dict, current_price: float,
     rows = dip_target_table((mc or {}).get('p_touch'),
                             (an or {}).get('p_touch'),
                             current_price, levels)
+    any_target = any(r['mc_dip'] or r['analog_dip'] for r in rows)
+    if not any_target:
+        return ("<div class='warn'>No dip threshold clears 60% conviction "
+                "under either method today. Regime does not support a "
+                "lean-in DCA signal &mdash; standard monthly cadence "
+                "recommended.</div>")
     body_rows = []
     for r in rows:
         body_rows.append(
@@ -179,7 +192,7 @@ def _dip_targets_table(mc: dict, an: dict, current_price: float,
             f"<td>{r['analog_dip'] or '-'}</td>"
             f"<td class='num'>{_fmt_money(r['analog_price'])}</td></tr>"
         )
-    body = "".join(body_rows) or "<tr><td colspan='5'>no data</td></tr>"
+    body = "".join(body_rows)
     return ("<table><thead><tr><th>Conviction</th>"
             "<th>MC dip</th><th>MC price</th>"
             f"<th>Analog dip</th><th>Analog price</th></tr></thead><tbody>{body}</tbody></table>")
