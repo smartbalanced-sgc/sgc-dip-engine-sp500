@@ -137,36 +137,57 @@ def _convergence_table(df: pd.DataFrame) -> list:
     return rows
 
 
-def _verdict(df: pd.DataFrame, base_rates: dict) -> tuple:
-    q_neg = df[df['composite'] <= -25]
-    q_pos = df[df['composite'] >= 25]
-    fl = 0.05
-    if len(q_neg) >= 10 and len(q_pos) >= 10 and base_rates.get('-5%', 0) > 0:
-        hit_neg = float((q_neg['realised'] <= -fl).mean())
-        hit_pos = float((q_pos['realised'] <= -fl).mean())
-        base = base_rates['-5%']
-        lift = hit_neg / base
-        if lift > 1.3:
-            label = "EDGE"
-            text = (f"Composite below -25 (n={len(q_neg)}) saw -5% dip hit rate "
-                    f"<b>{hit_neg:.1%}</b> vs base rate <b>{base:.1%}</b> "
-                    f"(lift <b>{lift:.2f}x</b>). Above +25 (n={len(q_pos)}) saw "
-                    f"{hit_pos:.1%}. Genuine edge present at the extremes.")
-        elif lift > 1.1:
-            label = "MARGINAL"
-            text = (f"Composite below -25 (n={len(q_neg)}) saw -5% dip hit rate "
-                    f"<b>{hit_neg:.1%}</b> vs base rate <b>{base:.1%}</b> "
-                    f"(lift <b>{lift:.2f}x</b>). Marginal edge - within noise band "
-                    f"of a 5y sample. Treat conviction signals with caution.")
-        else:
-            label = "NONE"
-            text = (f"Composite below -25 (n={len(q_neg)}) saw -5% dip hit rate "
-                    f"<b>{hit_neg:.1%}</b> vs base rate <b>{base:.1%}</b> "
-                    f"(lift <b>{lift:.2f}x</b>). No edge above noise. "
-                    f"Stick with vanilla monthly DCA.")
-        return label, text, hit_neg, hit_pos, base, lift, len(q_neg), len(q_pos)
-    return "NONE", "Insufficient sample at composite extremes for verdict.", \
-        None, None, None, None, len(q_neg), len(q_pos)
+def _verdict(df: pd.DataFrame, base_rates: dict, quintile_hits: dict) -> tuple:
+    """Use Q1 vs Q5 spread on -5% as the primary edge metric.
+    Sample sizes at composite ≤-25 are too thin to be reliable.
+    """
+    if not quintile_hits or '-5%' not in quintile_hits:
+        return ("NONE",
+                "Cannot compute verdict — quintile data unavailable.",
+                None, None, None, None)
+    q_hits = quintile_hits['-5%']
+    q1 = float(q_hits.iloc[0])
+    q5 = float(q_hits.iloc[-1])
+    base = float(base_rates.get('-5%', 0))
+    if base == 0:
+        return "NONE", "Base rate is zero, cannot compute lift.", q1, q5, base, None
+    lift = q1 / base
+    spread = q1 - q5
+
+    # Same logic on -3% as a cross-check
+    q_hits_3 = quintile_hits.get('-3%')
+    q1_3 = float(q_hits_3.iloc[0]) if q_hits_3 is not None else None
+    q5_3 = float(q_hits_3.iloc[-1]) if q_hits_3 is not None else None
+
+    if lift >= 1.30 and spread >= 0.10:
+        label = "EDGE"
+        text = (
+            f"Q1 (most dip-favourable composite quintile) hit -5% dip "
+            f"<b>{q1:.1%}</b> vs base rate <b>{base:.1%}</b> "
+            f"(lift <b>{lift:.2f}x</b>). Q1 minus Q5 spread = "
+            f"<b>{spread * 100:+.1f} percentage points</b>. "
+            f"On -3% dips: Q1={q1_3:.1%} vs Q5={q5_3:.1%}. "
+            f"Composite is producing genuine, exploitable edge."
+        )
+    elif lift >= 1.15 and spread >= 0.05:
+        label = "MARGINAL"
+        text = (
+            f"Q1 hit -5% <b>{q1:.1%}</b> vs base <b>{base:.1%}</b> "
+            f"(lift <b>{lift:.2f}x</b>). Q1&minus;Q5 spread = "
+            f"<b>{spread * 100:+.1f}pp</b>. "
+            f"On -3% dips: Q1={q1_3:.1%} vs Q5={q5_3:.1%}. "
+            f"Real but modest effect &mdash; the composite shifts dip "
+            f"probabilities by single-digit percentage points. "
+            f"Useful as a lean-in signal but not as a market-timing trigger."
+        )
+    else:
+        label = "NONE"
+        text = (
+            f"Q1 hit -5% <b>{q1:.1%}</b> vs base <b>{base:.1%}</b> "
+            f"(lift <b>{lift:.2f}x</b>). No reliable edge above noise. "
+            f"Stick with vanilla monthly DCA."
+        )
+    return label, text, q1, q5, base, lift
 
 
 def _calibration_plot(calib_mc: dict, calib_an: dict) -> str:
@@ -250,7 +271,7 @@ def render_report() -> Path:
 
     quintile_hits, base_rates = _quintile_hits(df)
     conv_rows = _convergence_table(df)
-    v_label, v_text, hit_neg, hit_pos, base5, lift, n_neg, n_pos = _verdict(df, base_rates)
+    v_label, v_text, q1, q5, base5, lift = _verdict(df, base_rates, quintile_hits)
 
     # Render tables
     base_table_rows = "".join(
