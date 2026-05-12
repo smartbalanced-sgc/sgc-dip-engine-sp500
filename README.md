@@ -18,10 +18,33 @@ Used to inform "lean-in" DCA decisions: front-load monthly contributions on high
 
 ## Build status
 
-- **Phase 1: Data layer** — in progress
-- Phase 2: Modelling layer — pending
-- Phase 3: Output layer (GitHub Pages dashboard) — pending
+- Phase 1: Data layer — done (v0.1-phase1-data)
+- Phase 2: Modelling layer — done (v0.2-phase2-modelling)
+- Phase 3a: Dashboard rendering — done (v0.3-phase3a-dashboard)
+- **Phase 3b: GitHub Actions daily cron + Pages publishing — in progress**
 - Phase 4: Backtest — pending
+
+## Live dashboard
+
+Once Pages is configured (see below): https://smartbalanced-sgc.github.io/sgc-dip-engine-sp500/
+
+## Deployment setup (one-time, in the GitHub UI)
+
+1. **Secrets** — at `Settings -> Secrets and variables -> Actions`, add three repository secrets:
+   - `FMP_API_KEY` — FMP Starter
+   - `FRED_API_KEY` — free, https://fred.stlouisfed.org/docs/api/api_key.html
+   - `TIINGO_API_KEY` — free, https://www.tiingo.com/
+
+2. **Pages** — at `Settings -> Pages`, set Source to "Deploy from a branch",
+   Branch to `main`, Folder to `/docs`. Save.
+
+3. **First run** — `Actions` tab -> `Daily SPY Dip Engine` -> `Run workflow`.
+   Wait ~3 min. The workflow runs `python3 src/main.py`, commits
+   `docs/index.html` + `data/conviction_history.jsonl` + `data/latest.md`
+   back to main, and Pages auto-publishes.
+
+4. **Cron** — afterwards, the workflow runs itself at 22:30 UTC Mon-Fri
+   (after US market close). No manual action needed.
 
 ## Setup
 

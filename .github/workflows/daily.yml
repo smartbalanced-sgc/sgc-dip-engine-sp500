@@ -1,0 +1,75 @@
+name: Daily SPY Dip Engine
+
+# 22:30 UTC weekdays = 5:30pm ET (EST) / 6:30pm ET (EDT). Always after US close.
+# Also runnable manually via "Run workflow" button in the Actions tab.
+# Also re-runs on push to main affecting engine code, so changes redeploy.
+
+on:
+  schedule:
+    - cron: '30 22 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'config/**'
+      - 'requirements.txt'
+      - '.github/workflows/daily.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-engine
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run engine
+        env:
+          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+        run: python3 src/main.py
+
+      - name: Commit + push outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Only commit small, durable artefacts. Raw signals JSON and models JSON
+          # are gitignored on purpose - they're ephemeral, the dashboard summarises them.
+          git add -f docs/index.html data/conviction_history.jsonl data/latest.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(daily): SPY dip engine run $(date -u +%Y-%m-%d)"
+          # Retry push on race with concurrent push to main
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "Pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "Push attempt $attempt failed, rebasing..."
+            git pull --rebase
+            sleep $((attempt * 5))
+          done
+          echo "All push attempts failed"
+          exit 1
