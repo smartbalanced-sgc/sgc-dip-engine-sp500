@@ -1,26 +1,74 @@
-"""SPY Dip Engine - Phase 1 orchestration.
+"""SPY Dip Engine - orchestration.
 
-Fetches all signals, writes JSON + markdown summary, prints sanity table.
+Phase 1: fetch all signals, write JSON + markdown summary.
+Phase 2: run Monte Carlo, historical analog matching, composite score,
+         and three-method convergence check. Emit conviction JSON + extended md.
 """
 
 import json
 from pathlib import Path
 
+import numpy as np
+
 from data_fetcher import fetch_all_signals, CFG, log, utcnow
+from monte_carlo import run_monte_carlo
+from historical_analog import find_analogs
+from composite_score import compute_composite
+from conviction import assess as assess_conviction
 
 
-def write_json(signals: dict) -> Path:
+def write_json(obj: dict, filename: str) -> Path:
     data_dir = Path(CFG['paths']['data_dir'])
     data_dir.mkdir(parents=True, exist_ok=True)
-    today = utcnow().date().strftime("%Y%m%d")
-    filename = CFG['paths']['raw_signals_filename'].format(date=today)
     out_path = data_dir / filename
     with open(out_path, "w") as f:
-        json.dump(signals, f, indent=2, default=str)
+        json.dump(obj, f, indent=2, default=str)
     return out_path
 
 
-def write_latest_markdown(signals: dict, json_path: Path) -> Path:
+def run_models(signals: dict) -> dict:
+    gspc_quote = signals.get('gspc_quote') or []
+    current_price = float(gspc_quote[0]['price']) if gspc_quote else None
+
+    vix_quote = signals.get('vix_quote') or []
+    vix_spot = float(vix_quote[0]['price']) if vix_quote else None
+
+    vix_3m_fred = signals.get('vix_3m_fred') or []
+    vix_3m = float(vix_3m_fred[-1]['value']) if vix_3m_fred else None
+
+    gspc_hist = signals.get('gspc_history') or []
+    closes = np.array(
+        [float(r['close']) for r in sorted(gspc_hist, key=lambda r: r['date'])],
+        dtype=np.float64,
+    )
+
+    mc = None
+    if current_price and vix_spot and vix_3m and len(closes) > 1:
+        log.info("Running Monte Carlo...")
+        mc = run_monte_carlo(current_price, vix_spot, vix_3m, closes)
+    else:
+        log.warning("MC skipped: missing price/vix/closes")
+
+    log.info("Computing historical analog matches...")
+    analog = find_analogs(signals)
+
+    log.info("Computing macro composite score...")
+    composite = compute_composite(signals)
+
+    log.info("Three-method convergence assessment...")
+    conv = assess_conviction(mc, analog, composite)
+
+    return {
+        "current_price": current_price,
+        "monte_carlo": mc,
+        "historical_analog": analog,
+        "composite": composite,
+        "conviction": conv,
+    }
+
+
+def write_latest_markdown(signals: dict, models: dict,
+                          raw_path: Path, models_path: Path) -> Path:
     data_dir = Path(CFG['paths']['data_dir'])
     md_path = data_dir / CFG['paths']['latest_summary_filename']
 
@@ -48,7 +96,7 @@ def write_latest_markdown(signals: dict, json_path: Path) -> Path:
         dx_latest_date = None
 
     lines = [
-        "# SPY Dip Engine - Latest Data Pull",
+        "# SPY Dip Engine - Latest",
         "",
         f"**Fetched:** {signals.get('fetched_at_utc')}",
         "",
@@ -64,40 +112,94 @@ def write_latest_markdown(signals: dict, json_path: Path) -> Path:
         (f"| Dollar index | {dx_latest} (as of {dx_latest_date}) | {dx_source} |"
          if dx_latest_date else f"| Dollar index | {dx_latest} | {dx_source} |"),
         "",
-        "## Row counts (data quality check)",
-        "",
     ]
-    for k, v in signals.items():
-        if k in ('fetched_at_utc', 'config_version'):
-            continue
-        if isinstance(v, list):
-            lines.append(f"- `{k}`: {len(v)} rows")
-        elif isinstance(v, dict):
-            if 'data' in v and isinstance(v['data'], list):
-                lines.append(f"- `{k}`: {len(v['data'])} rows (source: {v.get('source')})")
-            else:
-                lines.append(f"- `{k}`: dict with {len(v)} keys")
-        elif v is None:
-            lines.append(f"- `{k}`: NULL (fetch failed)")
-        else:
-            lines.append(f"- `{k}`: {type(v).__name__}")
+
+    conv = (models or {}).get('conviction') or {}
+    overall = conv.get('overall') or {}
+    comp = (models or {}).get('composite') or {}
+    mc = (models or {}).get('monte_carlo') or {}
+    an = (models or {}).get('historical_analog') or {}
+
+    lines += [
+        "## Phase 2 - Conviction",
+        "",
+        f"**Headline:** {overall.get('label')} "
+        f"at dip level {overall.get('dip_level')} "
+        f"(composite={overall.get('composite_normalised'):+.1f}, "
+        f"{overall.get('composite_interpretation')})",
+        "",
+        "### Probability of touching dip within 60d",
+        "",
+        "| Dip | Monte Carlo | Historical analog | Min-of-two | Label |",
+        "|---|---|---|---|---|",
+    ]
+    for level, e in (conv.get('by_dip_level') or {}).items():
+        mc_p = f"{e['mc_p']:.1%}" if e.get('mc_p') is not None else "n/a"
+        an_p = f"{e['analog_p']:.1%}" if e.get('analog_p') is not None else "n/a"
+        mn = f"{e['min_of_two']:.1%}"
+        lines.append(f"| {level} | {mc_p} | {an_p} | {mn} | {e['label']} |")
+
+    if conv.get('warnings'):
+        lines += ["", "### Warnings", ""]
+        for w in conv['warnings']:
+            lines.append(f"- {w}")
+
+    if comp.get('components'):
+        lines += ["", "## Composite score breakdown", "",
+                  "| Component | Score | Note |", "|---|---|---|"]
+        for k, v in comp['components'].items():
+            lines.append(f"| {k} | {v['score']:+.1f} | {v['note']} |")
+        lines.append(f"| **TOTAL (raw)** | **{comp.get('raw_total'):+.1f}** | "
+                     f"normalised={comp.get('normalised_score'):+.1f} |")
+
+    if mc.get('terminal_price'):
+        tp = mc['terminal_price']
+        mn = mc.get('min_price_corridor', {})
+        lines += [
+            "", "## Monte Carlo corridor (60d, terminal price)", "",
+            f"P10={tp.get('P10'):.0f} | P30={tp.get('P30'):.0f} | "
+            f"P50={tp.get('P50'):.0f} | P70={tp.get('P70'):.0f} | "
+            f"P90={tp.get('P90'):.0f}",
+            "",
+            "## Monte Carlo min-price corridor (worst touch over 60d)",
+            "",
+            f"P10={mn.get('P10'):.0f} | P30={mn.get('P30'):.0f} | "
+            f"P50={mn.get('P50'):.0f} | P70={mn.get('P70'):.0f} | "
+            f"P90={mn.get('P90'):.0f}",
+        ]
+
+    if an and an.get('k_matches'):
+        cf = an.get('current_fingerprint') or {}
+        lines += [
+            "",
+            f"## Historical analog (k={an['k_matches']} of "
+            f"{an['sample_size_total']} aligned days)",
+            "",
+            f"Fingerprint: RSI={cf.get('rsi'):.0f}, "
+            f"DD52w={cf.get('drawdown_52w'):.2%}, "
+            f"VIX={cf.get('vix'):.2f}, "
+            f"2-10y spread={cf.get('yc_spread'):.2f}",
+        ]
 
     lines += [
         "",
-        "## Raw JSON",
+        "## Raw data",
         "",
-        f"See `{json_path.name}` for the full signal dump.",
+        f"- Signals: `{raw_path.name}`",
+        f"- Models:  `{models_path.name}`",
         "",
     ]
     md_path.write_text("\n".join(lines))
     return md_path
 
 
-def print_summary(signals: dict, json_path: Path) -> None:
+def print_summary(signals: dict, models: dict, raw_path: Path,
+                  models_path: Path) -> None:
     print("\n" + "=" * 72)
-    print("PHASE 1 DATA FETCH - SUMMARY")
+    print("PHASE 1+2 RUN - SUMMARY")
     print("=" * 72)
-    print(f"Written: {json_path}")
+    print(f"Raw signals: {raw_path}")
+    print(f"Models:      {models_path}")
     print()
     print(f"{'Signal':<28} {'Rows / Status':<18} {'Notes'}")
     print("-" * 72)
@@ -123,16 +225,44 @@ def print_summary(signals: dict, json_path: Path) -> None:
             status = type(v).__name__
             note = ''
         print(f"{k:<28} {status:<18} {note}")
+
+    print("\n" + "=" * 72)
+    print("PHASE 2 - CONVICTION")
     print("=" * 72)
-    print("\nNext: inspect the JSON file and verify sanity before Phase 2.")
+    conv = (models or {}).get('conviction') or {}
+    overall = conv.get('overall') or {}
+    comp = (models or {}).get('composite') or {}
+    print(f"Headline: {overall.get('label')} "
+          f"@ dip {overall.get('dip_level')}")
+    print(f"Composite normalised: {overall.get('composite_normalised'):+.1f} "
+          f"({comp.get('interpretation')})")
+    print()
+    print(f"{'Dip':<6} {'MC':<8} {'Analog':<8} {'Min':<8} {'Label'}")
+    print("-" * 50)
+    for level, e in (conv.get('by_dip_level') or {}).items():
+        mc_p = f"{e['mc_p']:.1%}" if e.get('mc_p') is not None else "n/a"
+        an_p = f"{e['analog_p']:.1%}" if e.get('analog_p') is not None else "n/a"
+        mn = f"{e['min_of_two']:.1%}"
+        print(f"{level:<6} {mc_p:<8} {an_p:<8} {mn:<8} {e['label']}")
+    if conv.get('warnings'):
+        print()
+        for w in conv['warnings']:
+            print(f"  ! {w}")
+    print("=" * 72)
 
 
 def main() -> None:
-    log.info(f"SPY Dip Engine Phase 1 - {utcnow().isoformat()} UTC")
+    log.info(f"SPY Dip Engine - {utcnow().isoformat()} UTC")
     signals = fetch_all_signals()
-    json_path = write_json(signals)
-    md_path = write_latest_markdown(signals, json_path)
-    print_summary(signals, json_path)
+    today = utcnow().date().strftime("%Y%m%d")
+    raw_path = write_json(
+        signals,
+        CFG['paths']['raw_signals_filename'].format(date=today),
+    )
+    models = run_models(signals)
+    models_path = write_json(models, f"models_{today}.json")
+    md_path = write_latest_markdown(signals, models, raw_path, models_path)
+    print_summary(signals, models, raw_path, models_path)
     log.info(f"Markdown summary: {md_path}")
 
 
