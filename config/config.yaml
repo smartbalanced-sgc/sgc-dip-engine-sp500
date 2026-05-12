@@ -85,7 +85,14 @@ conviction:
 paths:
   data_dir: "data"
   raw_signals_filename: "raw_signals_{date}.json"
+  models_filename: "models_{date}.json"
   latest_summary_filename: "latest.md"
   cache_dir: "data/cache"
   long_history_cache: "data/cache/spy_long_history.json"
   long_history_refresh_days: 90
+  history_file: "data/conviction_history.jsonl"
+
+dashboard:
+  html_path: "docs/index.html"
+  conviction_target_levels: [0.60, 0.70, 0.80]
+  history_chart_days: 90

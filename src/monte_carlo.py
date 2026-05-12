@@ -52,6 +52,7 @@ def run_monte_carlo(current_price: float, vix_spot: float, vix_3m: float,
     eff_n = n_batches * b
     terminal = np.empty(eff_n, dtype=np.float64)
     min_price = np.empty(eff_n, dtype=np.float64)
+    first_batch_paths = None  # Kept for per-day corridor (memory-bounded)
 
     for i in range(n_batches):
         z = stats.t.rvs(df, size=(b, h)) * t_scale
@@ -59,6 +60,18 @@ def run_monte_carlo(current_price: float, vix_spot: float, vix_3m: float,
         paths = current_price * np.exp(np.cumsum(log_ret, axis=1))
         terminal[i * b:(i + 1) * b] = paths[:, -1]
         min_price[i * b:(i + 1) * b] = paths.min(axis=1)
+        if i == 0:
+            first_batch_paths = paths
+
+    # Per-day corridor from first batch (100k paths is plenty for P10..P90)
+    daily_pcts = np.percentile(first_batch_paths, [10, 30, 50, 70, 90], axis=0)
+    daily_corridor = [
+        {"day": int(d + 1),
+         "P10": float(daily_pcts[0, d]), "P30": float(daily_pcts[1, d]),
+         "P50": float(daily_pcts[2, d]), "P70": float(daily_pcts[3, d]),
+         "P90": float(daily_pcts[4, d])}
+        for d in range(h)
+    ]
 
     max_drawdown = min_price / current_price - 1
     terminal_ret = terminal / current_price - 1
@@ -87,4 +100,5 @@ def run_monte_carlo(current_price: float, vix_spot: float, vix_3m: float,
         "p_touch": {
             f"-{int(d * 100)}%": float(np.mean(max_drawdown <= -d)) for d in DIP_LEVELS
         },
+        "daily_corridor": daily_corridor,
     }

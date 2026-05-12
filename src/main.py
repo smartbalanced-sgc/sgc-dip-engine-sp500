@@ -15,6 +15,8 @@ from monte_carlo import run_monte_carlo
 from historical_analog import find_analogs
 from composite_score import compute_composite
 from conviction import assess as assess_conviction
+from history_log import append_run, read_history
+from dashboard import render_dashboard
 
 
 def write_json(obj: dict, filename: str) -> Path:
@@ -260,10 +262,18 @@ def main() -> None:
         CFG['paths']['raw_signals_filename'].format(date=today),
     )
     models = run_models(signals)
-    models_path = write_json(models, f"models_{today}.json")
+    models_path = write_json(
+        models,
+        CFG['paths'].get('models_filename', 'models_{date}.json').format(date=today),
+    )
     md_path = write_latest_markdown(signals, models, raw_path, models_path)
+    append_run(signals, models)
+    history_days = CFG.get('dashboard', {}).get('history_chart_days', 90)
+    history = read_history(n_days=history_days)
+    dashboard_path = render_dashboard(signals, models, history)
     print_summary(signals, models, raw_path, models_path)
     log.info(f"Markdown summary: {md_path}")
+    log.info(f"Dashboard:        {dashboard_path}")
 
 
 if __name__ == "__main__":
