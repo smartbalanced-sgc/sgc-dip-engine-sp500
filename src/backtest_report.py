@@ -80,20 +80,38 @@ def _build_df(records: list) -> pd.DataFrame:
 
 def _calibration(predicted: pd.Series, hit: pd.Series,
                  n_buckets: int = 10) -> Optional[pd.DataFrame]:
-    df = pd.DataFrame({'p': predicted, 'hit': hit.astype(int)}).dropna()
-    if len(df) < 20:
+    # Positional alignment via .values to avoid any index-alignment surprises
+    # in pandas 3.0 named aggregations.
+    p_arr = np.asarray(predicted.values, dtype=float)
+    h_arr = np.asarray(hit.values, dtype=float)
+    mask = ~np.isnan(p_arr) & ~np.isnan(h_arr)
+    p_arr = p_arr[mask]
+    h_arr = h_arr[mask]
+    if len(p_arr) < 20:
         return None
-    try:
-        df['bucket'] = pd.qcut(df['p'], q=min(n_buckets, df['p'].nunique()),
-                               duplicates='drop')
-    except ValueError:
+    n_buckets = min(n_buckets, len(np.unique(p_arr)))
+    if n_buckets < 2:
         return None
-    g = df.groupby('bucket', observed=True).agg(
-        predicted=('p', 'mean'),
-        realised=('hit', 'mean'),
-        n=('hit', 'size'),
-    ).reset_index(drop=True)
-    return g
+    quantiles = np.linspace(0, 1, n_buckets + 1)
+    edges = np.unique(np.quantile(p_arr, quantiles))
+    if len(edges) < 3:
+        return None
+    # Right-inclusive bucketing: edges[0..n] -> buckets [0..n-1]
+    bucket_ids = np.clip(np.searchsorted(edges, p_arr, side='right') - 1,
+                         0, len(edges) - 2)
+    rows = []
+    for b in range(len(edges) - 1):
+        sel = bucket_ids == b
+        if sel.sum() == 0:
+            continue
+        rows.append({
+            'predicted': float(p_arr[sel].mean()),
+            'realised': float(h_arr[sel].mean()),
+            'n': int(sel.sum()),
+        })
+    if not rows:
+        return None
+    return pd.DataFrame(rows)
 
 
 def _quintile_hits(df: pd.DataFrame) -> tuple:
