@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPY Dip Engine - Backtest</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       margin: 0; padding: 0; background: #f5f5f7; color: #1d1d1f; }
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+header { background: #1d1d1f; color: #f5f5f7; padding: 24px;
+         margin: -24px -24px 24px -24px; }
+header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+header p { margin: 4px 0 0 0; opacity: 0.7; font-size: 14px; }
+header a { color: #f5f5f7; text-decoration: underline; opacity: 0.8; }
+section { background: #fff; border-radius: 12px; padding: 24px;
+          margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+h2 { margin: 0 0 16px 0; font-size: 20px; font-weight: 600; }
+.verdict { background: #fff; border-radius: 12px; padding: 24px;
+           margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+           border-left: 6px solid #1d1d1f; }
+.verdict .label { font-size: 28px; font-weight: 700; margin: 8px 0; }
+.verdict .label.EDGE { color: #27ae60; }
+.verdict .label.MARGINAL { color: #d68000; }
+.verdict .label.NONE { color: #888; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 12px;
+         border-bottom: 1px solid #e5e5e7; font-size: 14px; }
+th { font-weight: 600; color: #666; text-transform: uppercase; font-size: 11px; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.chart { width: 100%; height: 380px; }
+.note { color: #666; font-size: 13px; margin-top: 8px; }
+footer { text-align: center; color: #999; padding: 24px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>SPY Dip Engine - Backtest</h1>
+    <p>Walk-forward over 967 aligned trading days
+       (20,000 MC paths/day,
+       k=30 analogs).
+       &nbsp;&middot;&nbsp; <a href="index.html">&larr; Back to live dashboard</a>
+    </p>
+  </div>
+</header>
+<div class="container">
+
+  <div class="verdict">
+    <div style="color:#666;font-size:14px">Honest verdict</div>
+    <div class="label NONE">NONE</div>
+    <div>Insufficient sample at composite extremes for verdict.</div>
+  </div>
+
+  <section>
+    <h2>Base rates (sanity)</h2>
+    <table><thead><tr><th>Dip</th><th>Base rate (any 60d window)</th></tr></thead><tbody><tr><td>-3%</td><td class='num'>45.8%</td></tr><tr><td>-5%</td><td class='num'>31.6%</td></tr><tr><td>-7%</td><td class='num'>20.6%</td></tr><tr><td>-10%</td><td class='num'>9.3%</td></tr></tbody></table>
+    <p class="note">How often did SPY touch each dip threshold within any forward 60d window in the backtest sample? These are the "do nothing" baselines.</p>
+  </section>
+
+  <section>
+    <h2>Composite score by quintile</h2>
+    <table><thead><tr><th>Quintile</th><th>-3%</th><th>-5%</th><th>-7%</th><th>-10%</th></tr></thead><tbody><tr><td>Q1 (most dip-favourable)</td><td class='num'>54.6%</td><td class='num'>39.2%</td><td class='num'>22.7%</td><td class='num'>10.8%</td></tr><tr><td>Q2</td><td class='num'>45.6%</td><td class='num'>30.1%</td><td class='num'>14.5%</td><td class='num'>7.3%</td></tr><tr><td>Q3</td><td class='num'>55.4%</td><td class='num'>37.3%</td><td class='num'>22.3%</td><td class='num'>10.9%</td></tr><tr><td>Q4</td><td class='num'>36.3%</td><td class='num'>24.4%</td><td class='num'>19.7%</td><td class='num'>7.8%</td></tr><tr><td>Q5 (least dip-favourable)</td><td class='num'>37.1%</td><td class='num'>27.3%</td><td class='num'>23.7%</td><td class='num'>9.8%</td></tr><tr><td><strong>Base rate</strong></td><td class='num'><strong>45.8%</strong></td><td class='num'><strong>31.6%</strong></td><td class='num'><strong>20.6%</strong></td><td class='num'><strong>9.3%</strong></td></tr></tbody></table>
+    <div id="quintile-chart" class="chart"></div>
+    <p class="note">Days bucketed by composite score (Q1 = most dip-favourable, Q5 = most complacent). If the composite has edge, Q1 should show notably higher dip hit rates than Q5 and than the base rate.</p>
+  </section>
+
+  <section>
+    <h2>Calibration (predicted vs realised)</h2>
+    <div id="calib-chart" class="chart"></div>
+    <p class="note">Each method outputs a probability P(touch dip in 60d). We bucket predictions into deciles and plot the bucket mean predicted vs the bucket realised hit rate. Points on the dotted diagonal = well calibrated. Above = under-predicts; below = over-predicts.</p>
+  </section>
+
+  <section>
+    <h2>Three-method convergence agreement</h2>
+    <table><thead><tr><th>Conviction</th><th>Dip</th><th>Signals</th><th>Hit rate</th><th>Base rate</th><th>Lift</th></tr></thead><tbody><tr><td>60%</td><td>-3%</td><td class='num'>332</td><td class='num'>47.6%</td><td class='num'>45.8%</td><td class='num'>1.04x</td></tr><tr><td>60%</td><td>-5%</td><td class='num'>182</td><td class='num'>42.9%</td><td class='num'>31.6%</td><td class='num'>1.35x</td></tr><tr><td>60%</td><td>-7%</td><td class='num'>39</td><td class='num'>0.0%</td><td class='num'>20.6%</td><td class='num'>0.00x</td></tr><tr><td>60%</td><td>-10%</td><td class='num'>0</td><td>-</td><td class='num'>9.3%</td><td class='num'>-</td></tr><tr><td>70%</td><td>-3%</td><td class='num'>220</td><td class='num'>60.0%</td><td class='num'>45.8%</td><td class='num'>1.31x</td></tr><tr><td>70%</td><td>-5%</td><td class='num'>46</td><td class='num'>4.3%</td><td class='num'>31.6%</td><td class='num'>0.14x</td></tr><tr><td>70%</td><td>-7%</td><td class='num'>0</td><td>-</td><td class='num'>20.6%</td><td class='num'>-</td></tr><tr><td>70%</td><td>-10%</td><td class='num'>0</td><td>-</td><td class='num'>9.3%</td><td class='num'>-</td></tr><tr><td>80%</td><td>-3%</td><td class='num'>59</td><td class='num'>35.6%</td><td class='num'>45.8%</td><td class='num'>0.78x</td></tr><tr><td>80%</td><td>-5%</td><td class='num'>0</td><td>-</td><td class='num'>31.6%</td><td class='num'>-</td></tr><tr><td>80%</td><td>-7%</td><td class='num'>0</td><td>-</td><td class='num'>20.6%</td><td class='num'>-</td></tr><tr><td>80%</td><td>-10%</td><td class='num'>0</td><td>-</td><td class='num'>9.3%</td><td class='num'>-</td></tr></tbody></table>
+    <p class="note">Rows show: when BOTH MC and analog gave a probability above the conviction threshold for a given dip level, how often did the dip actually occur? Lift &gt; 1.0 means signals were more likely to precede dips than the base rate.</p>
+  </section>
+
+  <section>
+    <h2>Method caveats</h2>
+    <ul>
+      <li>Economic calendar component intentionally skipped (forward-event data
+          only captured today; cannot reconstruct historical look-forward).</li>
+      <li>Sample is ~5y of aligned data &mdash; ~2-3 distinct macro regimes only.
+          Statistical power is modest. Phase 4b can extend via long FRED treasury history.</li>
+      <li>MC backtest uses 20,000 paths/day
+          (vs 1M in production) for speed. Probability estimates noisier in tails.</li>
+      <li>Analog matching excludes the forward 60d window to avoid look-ahead.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Generated: 2026-05-12T01:44:07.901915+00:00<br>
+    Source: github.com/smartbalanced-sgc/sgc-dip-engine-sp500
+  </footer>
+
+</div>
+<script>
+Plotly.newPlot('calib-chart', [{"x": [0, 1], "y": [0, 1], "name": "Perfect calibration", "type": "scatter", "mode": "lines", "line": {"dash": "dot", "width": 1, "color": "#999"}}, {"x": [0.33770670103092787, 0.3919536082474227, 0.44613906249999996, 0.4845226804123711, 0.5205010309278351, 0.5579942708333333, 0.6140067010309278, 0.6984906249999999, 0.7712123711340205, 0.8176917525773196], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.9896907216494846], "name": "MC -3%", "type": "scatter", "mode": "lines+markers"}, {"x": [0.06315789473684211, 0.25057471264367814, 0.3653061224489796, 0.4722222222222222, 0.5636015325670498, 0.6707482993197279, 0.8408496732026144, 0.986935286935287], "y": [1.0, 1.0, 1.0, 1.0, 0.9885057471264368, 1.0, 1.0, 1.0], "name": "Analog -3%", "type": "scatter", "mode": "lines+markers", "line": {"dash": "dash"}}, {"x": [0.17371958762886597, 0.2205659793814433, 0.2721109375, 0.3091123711340206, 0.34694329896907217, 0.38908125, 0.4540948979591837, 0.5564931578947369, 0.6529329896907217, 0.7210953608247423], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "name": "MC -5%", "type": "scatter", "mode": "lines+markers"}, {"x": [0.021449275362318842, 0.1318007662835249, 0.24397163120567375, 0.4083969465648855, 0.5143410852713178, 0.5918918918918918, 0.7347079037800687, 0.867750677506775, 0.984375], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "name": "Analog -5%", "type": "scatter", "mode": "lines+markers", "line": {"dash": "dash"}}, {"x": [0.08399072164948454, 0.11742422680412372, 0.157084375, 0.18782731958762885, 0.22099793814432991, 0.2593989583333333, 0.3223505154639175, 0.4276026041666667, 0.5382371134020619, 0.6231474226804125], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "name": "MC -7%", "type": "scatter", "mode": "lines+markers"}, {"x": [0.02836538461538462, 0.16779026217228465, 0.2669811320754717, 0.36296296296296293, 0.47, 0.5953623188405798, 0.7388888888888889, 0.8443137254901961, 0.9698581560283689], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "name": "Analog -7%", "type": "scatter", "mode": "lines+markers", "line": {"dash": "dash"}}, {"x": [0.02511958762886598, 0.04091701030927835, 0.0615109375, 0.08030103092783505, 0.10233402061855669, 0.12984166666666666, 0.17840463917525773, 0.2693921875, 0.38046288659793814, 0.48102422680412366], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "name": "MC -10%", "type": "scatter", "mode": "lines+markers"}, {"x": [0.003134796238244514, 0.10046296296296296, 0.21374269005847954, 0.3176706827309237, 0.39376947040498445, 0.5187499999999999, 0.6763052208835342, 0.8286738351254481], "y": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "name": "Analog -10%", "type": "scatter", "mode": "lines+markers", "line": {"dash": "dash"}}], {"margin": {"l": 60, "r": 20, "t": 20, "b": 40}, "xaxis": {"title": "Predicted P(touch)", "range": [0, 1], "tickformat": ".0%"}, "yaxis": {"title": "Realised hit rate", "range": [0, 1], "tickformat": ".0%"}, "hovermode": "closest", "legend": {"orientation": "h", "y": -0.2}}, {responsive: true});
+Plotly.newPlot('quintile-chart', [{"x": ["Q1 (most dip-favourable)", "Q2", "Q3", "Q4", "Q5 (least dip-favourable)"], "y": [0.5463917525773195, 0.45595854922279794, 0.5544041450777202, 0.3626943005181347, 0.3711340206185567], "name": "Hit rate -3%", "type": "bar"}, {"x": ["Q1 (most dip-favourable)", "Q2", "Q3", "Q4", "Q5 (least dip-favourable)"], "y": [0.3917525773195876, 0.3005181347150259, 0.37305699481865284, 0.24352331606217617, 0.27319587628865977], "name": "Hit rate -5%", "type": "bar"}, {"x": ["Q1 (most dip-favourable)", "Q2", "Q3", "Q4", "Q5 (least dip-favourable)"], "y": [0.2268041237113402, 0.14507772020725387, 0.22279792746113988, 0.19689119170984457, 0.23711340206185566], "name": "Hit rate -7%", "type": "bar"}, {"x": ["Q1 (most dip-favourable)", "Q2", "Q3", "Q4", "Q5 (least dip-favourable)"], "y": [0.10824742268041238, 0.07253886010362694, 0.10880829015544041, 0.07772020725388601, 0.0979381443298969], "name": "Hit rate -10%", "type": "bar"}], {"margin": {"l": 60, "r": 20, "t": 20, "b": 80}, "yaxis": {"title": "Forward-60d hit rate", "tickformat": ".0%"}, "barmode": "group", "hovermode": "x unified", "legend": {"orientation": "h", "y": -0.3}}, {responsive: true});
+</script>
+</body>
+</html>
