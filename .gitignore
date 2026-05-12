@@ -221,5 +221,6 @@ __marimo__/
 data/*.json
 data/*.csv
 data/cache/
+data/latest.md
 .DS_Store
 

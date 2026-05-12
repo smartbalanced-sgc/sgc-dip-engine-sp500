@@ -53,9 +53,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Only commit small, durable artefacts. Raw signals JSON and models JSON
-          # are gitignored on purpose - they're ephemeral, the dashboard summarises them.
-          git add -f docs/index.html data/conviction_history.jsonl data/latest.md
+          # Only commit small, durable artefacts. Raw signals JSON, models JSON,
+          # and latest.md are gitignored - they're ephemeral, the dashboard is
+          # the canonical view. History.jsonl is the only file that must persist
+          # across runs (so the dashboard's history chart can grow over time).
+          git add -f docs/index.html data/conviction_history.jsonl
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
