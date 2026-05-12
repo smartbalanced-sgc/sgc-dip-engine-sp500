@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPY Dip Engine</title>
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       margin: 0; padding: 0; background: #f5f5f7; color: #1d1d1f; }
+.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+header { background: #1d1d1f; color: #f5f5f7; padding: 24px;
+         margin: -24px -24px 24px -24px; }
+header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+header p { margin: 4px 0 0 0; opacity: 0.7; font-size: 14px; }
+.headline { background: #fff; border-radius: 12px; padding: 24px;
+            margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.headline .label { font-size: 36px; font-weight: 700; margin: 8px 0; }
+.headline .label.NONE { color: #888; }
+.headline .label.MODERATE { color: #d68000; }
+.headline .label.STRONG { color: #d63031; }
+.headline .label.EXTREME { color: #8e0000; }
+.headline .sub { color: #666; font-size: 14px; }
+section { background: #fff; border-radius: 12px; padding: 24px;
+          margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+h2 { margin: 0 0 16px 0; font-size: 20px; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 12px;
+         border-bottom: 1px solid #e5e5e7; font-size: 14px; }
+th { font-weight: 600; color: #666; text-transform: uppercase; font-size: 11px; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.warn { background: #fff8e1; border-left: 4px solid #f5a623;
+        padding: 12px 16px; margin-top: 12px; border-radius: 4px; font-size: 14px; }
+.divergence { background: #ffe9e9; border-left: 4px solid #d63031; }
+footer { text-align: center; color: #999; padding: 24px; font-size: 12px; }
+.chart { width: 100%; height: 420px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>SPY Dip Engine</h1>
+    <p>S&amp;P 500 60-day dip prediction. NOT for active trading. Last update: 2026-05-12T00:25:47.328326+00:00</p>
+  </div>
+</header>
+<div class="container">
+
+  <div class="headline">
+    <div class="sub">Headline conviction</div>
+    <div class="label NONE">NONE</div>
+    <div class="sub">at dip level <strong>-</strong> &middot;
+      composite <strong>-1.3</strong>
+      (Neutral / mixed)</div>
+    <div class='warn divergence'>DIVERGENCE at -3%: MC=47.0%, analog=6.7% (spread 40.3% > 20%)</div><div class='warn divergence'>DIVERGENCE at -5%: MC=30.5%, analog=0.0% (spread 30.5% > 20%)</div>
+  </div>
+
+  <section>
+    <h2>Current spot levels</h2>
+    <table><thead><tr><th>Signal</th><th>Value</th><th>Source</th></tr></thead><tbody><tr><td>^GSPC</td><td class='num'>7,412.95</td><td>FMP</td></tr><tr><td>^VIX</td><td class='num'>18.38</td><td>FMP</td></tr><tr><td>VIX3M/VIX</td><td class='num'>1.193</td><td>FRED</td></tr><tr><td>HY OAS %</td><td class='num'>2.81</td><td>FRED</td></tr><tr><td>Dollar index</td><td class='num'>118.04</td><td>fred:DTWEXBGS</td></tr></tbody></table>
+  </section>
+
+  <section><h2>60-Day Forward Corridor (Monte Carlo)</h2><div id='corridor-chart' class='chart'></div></section>
+
+  <section>
+    <h2>Dip targets by conviction</h2>
+    <table><thead><tr><th>Conviction</th><th>MC dip</th><th>MC price</th><th>Analog dip</th><th>Analog price</th></tr></thead><tbody><tr><td>60%</td><td>-</td><td class='num'>n/a</td><td>-</td><td class='num'>n/a</td></tr><tr><td>70%</td><td>-</td><td class='num'>n/a</td><td>-</td><td class='num'>n/a</td></tr><tr><td>80%</td><td>-</td><td class='num'>n/a</td><td>-</td><td class='num'>n/a</td></tr></tbody></table>
+    <p style="color:#666;font-size:13px;margin-top:8px">
+      Deepest dip threshold whose 60-day touch probability meets each conviction level.
+      MC = stochastic Student-t Monte Carlo. Analog = empirical hit rate of k-nearest
+      historical regime matches.
+    </p>
+  </section>
+
+  <section>
+    <h2>Three-method convergence</h2>
+    <table><thead><tr><th>Dip</th><th>MC</th><th>Analog</th><th>Min-of-two</th><th>Label</th></tr></thead><tbody><tr><td>-3%</td><td class='num'>47.0%</td><td class='num'>6.7%</td><td class='num'>6.7%</td><td>NONE</td></tr><tr><td>-5%</td><td class='num'>30.5%</td><td class='num'>0.0%</td><td class='num'>0.0%</td><td>NONE</td></tr><tr><td>-7%</td><td class='num'>19.1%</td><td class='num'>0.0%</td><td class='num'>0.0%</td><td>NONE</td></tr><tr><td>-10%</td><td class='num'>8.8%</td><td class='num'>0.0%</td><td class='num'>0.0%</td><td>NONE</td></tr><tr><td>-15%</td><td class='num'>2.0%</td><td class='num'>0.0%</td><td class='num'>0.0%</td><td>NONE</td></tr><tr><td>-20%</td><td class='num'>0.4%</td><td class='num'>0.0%</td><td class='num'>0.0%</td><td>NONE</td></tr></tbody></table>
+    <p style='color:#666;font-size:13px;margin-top:8px'>Today's fingerprint: RSI=79, DD52w=0.00%, VIX=18.38, 2-10y=0.47. Matched against 30 of 1226 aligned historical days.</p>
+  </section>
+
+  <section>
+    <h2>Macro composite breakdown</h2>
+    <table><thead><tr><th>Component</th><th>Score</th><th>Note</th></tr></thead><tbody><tr><td>vix_regime</td><td class='num'>-0.1</td><td>neutral (vix=18.38)</td></tr><tr><td>vix_term_structure</td><td class='num'>+5.0</td><td>steep contango (1.193)</td></tr><tr><td>yield_curve</td><td class='num'>+0.9</td><td>normal positive (cur=0.47)</td></tr><tr><td>credit_spreads</td><td class='num'>+4.7</td><td>stable (cur=2.81, dlt=-0.13)</td></tr><tr><td>sector_rotation</td><td class='num'>+4.2</td><td>cyc-def=+0.32 (cyc=+0.27, def=-0.04)</td></tr><tr><td>dollar_trend</td><td class='num'>+3.4</td><td>30d=-0.69% (cur=118.04)</td></tr><tr><td>rsi_drawdown</td><td class='num'>-10.0</td><td>overbought (rsi=79, dd=0.00%)</td></tr><tr><td>economic_calendar</td><td class='num'>-10.0</td><td>FOMC in 14d; CPI in 0d</td></tr><tr><td><strong>TOTAL (normalised)</strong></td><td class='num'><strong>-1.3</strong></td><td>Neutral / mixed</td></tr></tbody></table>
+  </section>
+
+  <section><h2>Conviction History (1 runs)</h2><div id='history-chart' class='chart'></div></section>
+
+  <footer>
+    Built from FMP + FRED + Tiingo. Modelling vehicle ^GSPC, execution VUAA.L.
+    Source: github.com/smartbalanced-sgc/sgc-dip-engine-sp500
+  </footer>
+
+</div>
+<script>
+Plotly.newPlot('corridor-chart', [{"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60], "y": [7519.982396906697, 7577.952785058872, 7624.591254357694, 7665.356874386093, 7704.106296888994, 7738.005374798686, 7772.174995765291, 7801.835971012038, 7830.792336233081, 7859.7244435618295, 7888.350788657751, 7914.805702224616, 7940.077910946872, 7965.4930596147715, 7990.367624570741, 8014.914845988784, 8040.470086018265, 8064.346323846869, 8088.034238451028, 8112.984553390544, 8135.856486086292, 8159.863218948978, 8182.460801354132, 8203.409874069552, 8224.735165315242, 8245.72158569584, 8268.553769616692, 8289.30179763652, 8311.080967972437, 8332.231930681763, 8353.507155418094, 8376.806098057254, 8396.31724404992, 8416.149482421803, 8436.06706367461, 8455.101479122937, 8477.020402274331, 8496.31758511034, 8517.020979500183, 8535.43043969565, 8556.080369975838, 8574.282535247747, 8593.808738885087, 8614.893859538053, 8632.437075250346, 8650.462812923979, 8672.488244126866, 8691.143311299484, 8709.74246586568, 8727.751014319796, 8747.253514925891, 8765.522896229117, 8783.820053567637, 8804.951739408743, 8824.518903527522, 8840.868067243002, 8861.182895250853, 8883.236907994062, 8900.008115611385, 8919.114912602834], "name": "P90", "type": "scatter", "mode": "lines", "line": {"width": 0}, "showlegend": false}, {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60], "y": [7457.287808509314, 7484.91872185386, 7509.417858955261, 7530.92635787152, 7551.282525165052, 7570.3801038608035, 7587.721091567741, 7604.517175172984, 7620.846233056356, 7636.505675274925, 7654.319296154844, 7668.506904506234, 7684.164322979455, 7699.225859493485, 7714.413643297101, 7727.29031584165, 7742.1375754981445, 7755.962426877547, 7771.222602428122, 7784.841364309726, 7799.941293898272, 7813.6632923918, 7827.67471539043, 7840.397049628346, 7854.1177031352945, 7867.350531925471, 7881.8914690095835, 7894.236676124573, 7906.88505208913, 7920.445703805762, 7933.708915273082, 7946.29282179147, 7959.423133385152, 7972.611096287079, 7985.894525393815, 7999.993865296549, 8011.9797795757495, 8025.689565325053, 8037.877508717846, 8049.405266123822, 8060.687895080235, 8074.361261227543, 8089.397646819064, 8101.372160943361, 8112.4087154068275, 8125.993544786196, 8137.31771058141, 8150.700522299377, 8163.322455921462, 8175.095370292204, 8186.656974143658, 8200.024170583894, 8213.130549527981, 8225.14591248824, 8237.30815716536, 8249.715706199519, 8262.762054413779, 8276.521252451495, 8289.550361005573, 8300.99674052374], "name": "P70-P90", "type": "scatter", "mode": "lines", "fill": "tonexty", "fillcolor": "rgba(46,204,113,0.15)", "line": {"width": 0}}, {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60], "y": [7420.391873195762, 7428.721863001181, 7437.175377156309, 7445.126515821252, 7453.621560310792, 7460.714974389475, 7468.934066569446, 7477.770084485373, 7485.437483011932, 7493.655521676693, 7502.231582105645, 7508.884752781663, 7516.31616935803, 7524.0427140207685, 7534.097057137124, 7541.010097769484, 7548.308749593314, 7557.051555185128, 7565.443889972135, 7572.958806214073, 7581.124634204655, 7589.20368447847, 7596.781425947739, 7605.794322962152, 7614.051887743111, 7621.374689637716, 7630.181611383147, 7638.602551405739, 7648.046020356996, 7655.4009898819395, 7663.5607987909625, 7671.938730752696, 7681.086763031444, 7687.420784440927, 7695.841381649241, 7704.459259664607, 7711.903412526778, 7721.230267300159, 7727.983770757225, 7735.217786023712, 7743.7485637230775, 7752.836303113911, 7761.18806212104, 7770.15183194436, 7778.369162733663, 7787.676456107144, 7795.239679555262, 7802.424472805329, 7812.300032623265, 7821.408716986216, 7828.417307580212, 7835.5771536163375, 7844.439680729561, 7853.160877949365, 7861.175483922812, 7869.686579347008, 7878.861365521834, 7887.771315973662, 7896.5196876143345, 7905.457118545628], "name": "P50-P70", "type": "scatter", "mode": "lines", "fill": "tonexty", "fillcolor": "rgba(46,204,113,0.30)", "line": {"width": 1, "color": "#27ae60"}}, {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60], "y": [7383.959784708164, 7372.650163424603, 7365.503681902176, 7359.905123501284, 7356.729710397866, 7354.442093184657, 7353.750226773083, 7352.81986946529, 7353.0270430842065, 7353.579209634426, 7353.592857908552, 7353.096519715638, 7355.077732465305, 7356.869125855274, 7359.540079261435, 7360.07685283914, 7361.491370933987, 7363.802318050313, 7365.502166327336, 7366.278807364949, 7369.3766935588965, 7370.795553886887, 7375.357771659118, 7377.042997265282, 7380.237501292605, 7383.098092588974, 7388.388337244866, 7392.502193026439, 7393.928954563291, 7396.80881423596, 7401.184083180156, 7404.810449698168, 7408.496465555796, 7413.732344642355, 7417.063280425569, 7421.6069195423825, 7425.292867428021, 7428.693831051403, 7433.114440827085, 7437.4971844185875, 7440.471974200876, 7445.066085732196, 7449.45735009164, 7452.588518729008, 7456.28060140003, 7461.884451067924, 7466.454634116141, 7470.676085132554, 7475.588721705273, 7479.864162948686, 7484.157269230382, 7490.719664181244, 7494.845543557244, 7500.532597534911, 7503.584654607611, 7509.426311903386, 7514.185856261662, 7520.145371422341, 7524.633887462979, 7531.362194287281], "name": "P30-P50", "type": "scatter", "mode": "lines", "fill": "tonexty", "fillcolor": "rgba(231,76,60,0.30)", "line": {"width": 0}}, {"x": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60], "y": [7322.958539456548, 7282.465790898125, 7253.71866982586, 7230.611785056391, 7210.152739149784, 7194.6572011584185, 7179.374212248032, 7168.4739369254485, 7157.022262704665, 7145.423117672817, 7136.702626293778, 7126.703868117246, 7117.687645411914, 7110.4973243543245, 7102.408719941367, 7096.153131353734, 7090.960301854679, 7085.461906164744, 7078.710130509323, 7074.237644845194, 7069.5899843676125, 7065.0152622148125, 7060.254820011942, 7054.570018659511, 7050.369905898878, 7046.338011069135, 7043.27090372882, 7038.688111668135, 7038.068278161869, 7034.830046294955, 7032.381796267102, 7031.999120684086, 7026.809522382244, 7026.190657236903, 7022.487308667199, 7021.90869922406, 7021.187924640383, 7018.530982138205, 7016.219710602052, 7013.236062769714, 7012.515441998241, 7012.619258470381, 7012.9869532065095, 7011.41425706019, 7009.590217951698, 7011.087058929805, 7010.14045758727, 7009.891761661183, 7009.916995214162, 7009.551446618999, 7010.551535896883, 7011.37677381472, 7013.276242404241, 7012.643967228957, 7010.616328795448, 7010.770945753279, 7013.287994102905, 7011.460691319074, 7014.086650596349, 7011.4308151185805], "name": "P10-P30", "type": "scatter", "mode": "lines", "fill": "tonexty", "fillcolor": "rgba(231,76,60,0.15)", "line": {"width": 0}}, {"x": [0, 60], "y": [7412.95, 7412.95], "name": "Spot 7413", "type": "scatter", "mode": "lines", "line": {"dash": "dash", "width": 2, "color": "#1d1d1f"}}], {"margin": {"l": 60, "r": 20, "t": 20, "b": 40}, "xaxis": {"title": "Days forward"}, "yaxis": {"title": "^GSPC price"}, "hovermode": "x unified", "showlegend": true, "legend": {"orientation": "h", "y": -0.2}}, {responsive: true});
+Plotly.newPlot('history-chart', [{"x": ["2026-05-12"], "y": [-1.2925362435767545], "name": "Composite (-100..+100)", "yaxis": "y", "type": "scatter", "mode": "lines+markers", "line": {"color": "#1d1d1f"}}, {"x": ["2026-05-12"], "y": [0.30464], "name": "P(touch -5% in 60d)", "yaxis": "y2", "type": "scatter", "mode": "lines+markers", "line": {"color": "#d63031"}}], {"margin": {"l": 60, "r": 60, "t": 20, "b": 40}, "yaxis": {"title": "Composite", "side": "left"}, "yaxis2": {"title": "P(-5% in 60d)", "side": "right", "overlaying": "y", "tickformat": ".0%"}, "hovermode": "x unified", "legend": {"orientation": "h", "y": -0.2}}, {responsive: true});
+</script>
+</body>
+</html>
