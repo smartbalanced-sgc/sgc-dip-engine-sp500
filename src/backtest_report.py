@@ -278,11 +278,13 @@ def render_report() -> Path:
     df = _build_df(records)
     log.info(f"Usable rows after dropping NaN realised: {len(df)}")
 
-    # Calibration per dip level per method
+    # Calibration per dip level per method.
+    # NOTE: DIP_LEVELS_PCT entries like "-3%" already contain the minus sign,
+    # so do NOT compute fl from the string - it would end up negative. Zip
+    # with DIP_LEVELS_FLOAT which has the magnitudes (0.03, 0.05, ...).
     calib_mc = {}
     calib_an = {}
-    for level in DIP_LEVELS_PCT:
-        fl = float(level.rstrip('%')) / 100
+    for level, fl in zip(DIP_LEVELS_PCT, DIP_LEVELS_FLOAT):
         hit = df['realised'] <= -fl
         calib_mc[level] = _calibration(df[f'mc_{level}'], hit)
         calib_an[level] = _calibration(df[f'analog_{level}'], hit)
