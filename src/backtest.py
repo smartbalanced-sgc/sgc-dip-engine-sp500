@@ -117,7 +117,18 @@ def build_aligned_df(signals: dict) -> pd.DataFrame:
         'hy': hy,
         'dxy': dxy,
         'sector_rot': sector_rot,
-    }).ffill(limit=5).dropna()
+    }).ffill(limit=5)
+    # REQUIRED features (all have ~5y coverage). OPTIONAL features (hy ~3y,
+    # dxy ~5y but sometimes patchy, sector_rot only ~60d usable) are allowed
+    # to stay NaN - composite_at returns 0 for those components when missing.
+    required = ['close', 'rsi', 'dd', 'vix', 'vix3m', 'yc']
+    df = df.dropna(subset=required)
+    log.info(
+        f"Aligned df coverage: required={len(df)} rows, "
+        f"hy_pct={df['hy'].notna().mean():.0%}, "
+        f"dxy_pct={df['dxy'].notna().mean():.0%}, "
+        f"sector_pct={df['sector_rot'].notna().mean():.0%}"
+    )
     return df
 
 
@@ -167,8 +178,8 @@ def composite_at(row: pd.Series, history: pd.DataFrame) -> tuple:
         scores['yc'] = _linmap(cur_yc, 0, 2.5, 0, 5)
 
     hy_now = row.get('hy')
-    if not pd.isna(hy_now):
-        hy_30d = history['hy'].iloc[-21] if len(history) > 21 else history['hy'].iloc[0]
+    hy_30d = history['hy'].iloc[-21] if len(history) > 21 else history['hy'].iloc[0]
+    if not pd.isna(hy_now) and not pd.isna(hy_30d):
         trend = hy_now - hy_30d
         if trend > 0.5:
             scores['credit'] = -15.0
@@ -183,9 +194,9 @@ def composite_at(row: pd.Series, history: pd.DataFrame) -> tuple:
     scores['sector'] = _linmap(sec, -1.5, 1.5, -20, 20) if not pd.isna(sec) else 0.0
 
     dxy_now = row.get('dxy')
-    if not pd.isna(dxy_now):
-        dxy_30d = history['dxy'].iloc[-21] if len(history) > 21 else history['dxy'].iloc[0]
-        pct = (dxy_now - dxy_30d) / dxy_30d * 100 if dxy_30d else 0
+    dxy_30d = history['dxy'].iloc[-21] if len(history) > 21 else history['dxy'].iloc[0]
+    if not pd.isna(dxy_now) and not pd.isna(dxy_30d) and dxy_30d != 0:
+        pct = (dxy_now - dxy_30d) / dxy_30d * 100
         scores['dxy'] = _linmap(pct, -3.0, 3.0, 15, -15)
     else:
         scores['dxy'] = 0.0
